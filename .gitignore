@@ -1,6 +1,6 @@
-# STM32CubeIDE build artifacts and temporary files
+# STM32CubeIDE build output (regenerated on every build)
 Debug/
-Drivers/
+Release/
 *.o
 *.elf
 *.map
@@ -8,12 +8,17 @@ Drivers/
 *.d
 *.su
 *.cyclo
-rfidf Debug.launch
-.cproject
-.project
-.settings/
-.dist/
+*.bin
+*.hex
+
+# Personal IDE / debugger settings
 .vscode/
+*.launch
+
+# Editor temp files
 *.swp
 *.swo
 *~
+
+# Note: Drivers/, .project, .cproject, .mxproject and .settings/ are kept in the
+# repo on purpose so the project imports into STM32CubeIDE and builds as-is.

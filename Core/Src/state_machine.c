@@ -28,34 +28,19 @@
  * User Data & Configuration
  * ============================================================================ */
 
-/** Student UIDand name mapping (preloaded roster) */
+/** One registered card: UID, display name and starting balance */
 typedef struct {
     uint8_t uid[5];
-    char name[16];
+    char    name[16];
+    int32_t start_balance_paise;
 } UserInfo;
 
-/** Preloaded student roster */
+/** Preloaded student roster (single source of truth for UIDs, names, balances) */
 static const UserInfo users[STUDENT_PRELOAD_COUNT] = {
-    { {0x47,0x5A,0x95,0xB2,0x3A}, "ROHAN"  },
-    { {0xF7,0x88,0x60,0xB2,0xAD}, "ROHIT"  },
-    { {0xB7,0xC8,0x64,0xB2,0xA9}, "SNEHA"  },
-    { {0x67,0x5B,0x93,0xB2,0x1D}, "DAKSH"  }
-};
-
-/** Preset student card UIDs for preload */
-static const uint8_t preset_uids[STUDENT_PRELOAD_COUNT][5] = {
-    {0x47, 0x5A, 0x95, 0xB2, 0x3A},
-    {0xF7, 0x88, 0x60, 0xB2, 0xAD},
-    {0xB7, 0xC8, 0x64, 0xB2, 0xA9},
-    {0x67, 0x5B, 0x93, 0xB2, 0x1D}
-};
-
-/** Preset student starting balances (in paise/cents) */
-static const int32_t preset_balances[STUDENT_PRELOAD_COUNT] = { 
-    50,     /* ROHAN: 0.50 rupees */
-    2000,   /* ROHIT: 20.00 rupees */
-    750,    /* SNEHA: 7.50 rupees */
-    10000   /* DAKSH: 100.00 rupees */
+    { {0x47,0x5A,0x95,0xB2,0x3A}, "ROHAN",    50 },   /*   0.50 */
+    { {0xF7,0x88,0x60,0xB2,0xAD}, "ROHIT",  2000 },   /*  20.00 */
+    { {0xB7,0xC8,0x64,0xB2,0xA9}, "SNEHA",   750 },   /*   7.50 */
+    { {0x67,0x5B,0x93,0xB2,0x1D}, "DAKSH", 10000 }    /* 100.00 */
 };
 
 /** Menu operation type enumeration */
@@ -304,14 +289,13 @@ static void show_menu_option(const uint8_t uid[5])
 /**
  * preload_wallet_local
  * @brief Initialize wallet with preloaded student cards and demo transactions
- * @param uids: Array of UIDs to preload
- * @param balances: Array of initial balances (in paise)
+ * @param roster: Registered cards (UID + starting balance)
  * @param count: Number of entries
  * @return void
  */
-static void preload_wallet_local(const uint8_t uids[][5], const int32_t balances[], int count)
+static void preload_wallet_local(const UserInfo roster[], int count)
 {
-    if (!uids || count <= 0) {
+    if (!roster || count <= 0) {
         return;
     }
     
@@ -320,7 +304,7 @@ static void preload_wallet_local(const uint8_t uids[][5], const int32_t balances
     }
     
     for (int i = 0; i < count; ++i) {
-        const uint8_t *uid = uids[i];
+        const uint8_t *uid = roster[i].uid;
         int slot = wallet_find_slot_by_uid(uid);
         
         if (slot < 0) {
@@ -336,8 +320,8 @@ static void preload_wallet_local(const uint8_t uids[][5], const int32_t balances
         }
         
         /* Add initial balance transaction */
-        if (balances && balances[i] != 0) {
-            wallet_add_transaction_by_slot(slot, balances[i]);
+        if (roster[i].start_balance_paise != 0) {
+            wallet_add_transaction_by_slot(slot, roster[i].start_balance_paise);
         }
         
         /* Add demo transactions for history display */
@@ -367,7 +351,7 @@ static void wait_card_removed(uint8_t uid[5])
         } else {
             no++;
             ok = 0;
-            card_present = (ok >= CARD_STABLE_COUNT);
+            card_present = 0;
         }
     }
 }
@@ -385,7 +369,7 @@ static void handle_unknown_card(uint8_t uid[5])
     lcd_print_line(1, "UNREGISTERED");
     lcd_print_line(2, get_username_str(uid));
     buzzer_beep(BUZZER_OK_DURATION_MS);
-    HAL_Delay(CARD_WAIT_LOOP_INTERVAL_MS);
+    HAL_Delay(UNKNOWN_CARD_BEEP_GAP_MS);
     buzzer_beep(BUZZER_OK_DURATION_MS);
     
     wait_card_removed(uid);
@@ -474,138 +458,11 @@ static void perform_menu_action(const uint8_t uid[5])
                 lcd_print_line(2, b);
                 printf(" #%lu: %ld.%02ld\r\n", (unsigned long)t.seq,
                        (long)(t.amount/100), (long)llabs(t.amount%100));
-                HAL_Delay(900);
+                HAL_Delay(HISTORY_ENTRY_DISPLAY_MS);
             }
         }
         beep_done();
         
-    } else if (menu_index == MENU_EXIT) {
-        current_state = STATE_EXIT_MENU;
-        lcd_clear();
-        lcd_print_line(1, "Exiting Menu");
-        lcd_print_line(2, "Remove Card");
-        beep_ok();
-        in_menu = 0;
-    }
-}
-    snprintf(l1, sizeof(l1), "%s's Wallet", get_username_str(uid));
-    snprintf(l2, sizeof(l2), "%s", menu_text[menu_index]);
-    lcd_clear();
-    lcd_print_line(1, l1);
-    lcd_print_line(2, l2);
-}
-
-static void preload_wallet_local(const uint8_t uids[][5], const int32_t balances[], int count) {
-    if (!uids || count <= 0) return;
-    if (count > WALLET_MAX_CARDS) count = WALLET_MAX_CARDS;
-    for (int i = 0; i < count; ++i) {
-        const uint8_t *uid = uids[i];
-        int slot = wallet_find_slot_by_uid(uid);
-        if (slot < 0) {
-            slot = wallet_find_or_create_slot(uid);
-            if (slot < 0) {
-                printf("Preload: cannot create slot for UID ");
-                for (int k = 0; k < 5; ++k) printf("%02X ", uid[k]);
-                printf("\r\n");
-                continue;
-            }
-        }
-        if (balances && balances[i] != 0) wallet_add_transaction_by_slot(slot, balances[i]);
-        wallet_add_transaction_by_slot(slot, -150);
-        wallet_add_transaction_by_slot(slot, -50);
-        printf("Preloaded slot %d for UID %02X %02X %02X %02X %02X\r\n",
-               slot, uid[0], uid[1], uid[2], uid[3], uid[4]);
-    }
-}
-
-static void wait_card_removed(uint8_t uid[5]) {
-    while (card_present) {
-        HAL_Delay(80);
-        uint8_t st = MFRC522_Check(uid);
-        if (st == MI_OK) { ok = STABLE_COUNT; no = 0; card_present = 1; }
-        else { no++; ok = 0; card_present = 0; }
-    }
-}
-
-static void handle_unknown_card(uint8_t uid[5]) {
-    printf("UNREGISTERED CARD\r\n");
-    lcd_clear();
-    lcd_print_line(1, "UNREGISTERED");
-    lcd_print_line(2, get_username_str(uid));
-    buzzer_beep(60);
-    HAL_Delay(80);
-    buzzer_beep(60);
-    wait_card_removed(uid);
-    welcome_shown = 0;
-    show_ready_screen();
-}
-
-static void perform_menu_action(const uint8_t uid[5]) {
-    const char *label = get_username_str(uid);
-    printf("Selecting option %d (%s) for label %s slot %d\r\n", menu_index, menu_text[menu_index], label, current_slot);
-
-    if (menu_index == MENU_BALANCE) {
-        current_state = STATE_SHOW_BALANCE;
-        int32_t bal = wallet_get_balance_by_slot(current_slot);
-        char buf[17];
-        uint32_t absbal = (uint32_t)((bal < 0) ? -bal : bal);
-        snprintf(buf, sizeof(buf), "Bal %lu.%02lu", (unsigned long)(absbal/100), (unsigned long)(absbal%100));
-        if (bal < LOW_BALANCE_THRESHOLD) {
-            lcd_clear();
-            lcd_print_line(1, "LOW BALANCE");
-            lcd_print_line(2, buf);
-            beep_low_alert();
-        } else {
-            lcd_clear();
-            lcd_print_line(1, "Balance");
-            lcd_print_line(2, buf);
-            beep_done();
-        }
-        print_slot_info_uart(current_slot);
-    } else if (menu_index == MENU_ADD_10) {
-        current_state = STATE_ADD_10;
-        wallet_add_transaction_by_slot(current_slot, 1000);
-        lcd_clear();
-        lcd_print_line(1, "Added 10.00");
-        lcd_print_line(2, "Success");
-        print_slot_info_uart(current_slot);
-        beep_done();
-    } else if (menu_index == MENU_SUB_1) {
-        current_state = STATE_SUB_1;
-        wallet_add_transaction_by_slot(current_slot, -100);
-        int32_t bal = wallet_get_balance_by_slot(current_slot);
-        char buf[17];
-        uint32_t absbal = (uint32_t)((bal < 0) ? -bal : bal);
-        snprintf(buf, sizeof(buf), "%lu.%02lu", (unsigned long)(absbal/100), (unsigned long)(absbal%100));
-        if (bal < LOW_BALANCE_THRESHOLD) {
-            lcd_clear();
-            lcd_print_line(1, "LOW BALANCE");
-            lcd_print_line(2, buf);
-            beep_low_alert();
-        } else {
-            lcd_clear();
-            lcd_print_line(1, "Subtracted 1.00");
-            lcd_print_line(2, "Done");
-            beep_done();
-        }
-        print_slot_info_uart(current_slot);
-    } else if (menu_index == MENU_HISTORY) {
-        current_state = STATE_HISTORY;
-        uint8_t cnt = wallet_get_txcount_by_slot(current_slot);
-        printf("History (count=%d):\r\n", cnt);
-        lcd_clear();
-        lcd_print_line(1, "History:");
-        for (uint8_t i = 0; i < cnt && i < 4; i++) {
-            WalletTx t;
-            if (wallet_get_tx_by_slot(current_slot, i, &t) == 0) {
-                char b[17];
-                snprintf(b, sizeof(b), "%ld.%02ld", (long)(t.amount/100), (long)llabs(t.amount%100));
-                lcd_print_line(2, b);
-                printf(" #%lu: %ld.%02ld\r\n", (unsigned long)t.seq, (long)(t.amount/100), (long)llabs(t.amount%100));
-                HAL_Delay(900);
-            }
-        }
-        beep_done();
     } else if (menu_index == MENU_EXIT) {
         current_state = STATE_EXIT_MENU;
         lcd_clear();
@@ -625,7 +482,7 @@ static void perform_menu_action(const uint8_t uid[5]) {
  * 2. Menu Navigation: Cycles through menu options (balance, add credit, subtract, history, exit)
  * 3. Hold-to-Select: Waits for MENU_HOLD_TIME_MS card presence to confirm menu action
  * 4. Inactivity Timeout: Exits menu after MENU_INACTIVITY_TIMEOUT_MS without activity
- * 5. Exit Button: Supports EXIT_BUTTON (PC13) to manually escape menu
+ * 5. Exit Button: EXIT button (see config.h) manually escapes the menu
  *
  * Peripheral initialization sequence: wallet_init → MFRC522 reset and init → lcd_init
  * Student roster preloaded via preload_wallet_local() at startup.
@@ -642,7 +499,7 @@ void state_machine_run(void) {
     
     /* Initialize wallet data structures and preload student roster */
     wallet_init();
-    preload_wallet_local(preset_uids, preset_balances, STUDENT_PRELOAD_COUNT);
+    preload_wallet_local(users, STUDENT_PRELOAD_COUNT);
 
     /* MFRC522 hardware reset: hold RST low then high to force reset */
     HAL_GPIO_WritePin(MFRC522_RST_GPIO_Port, MFRC522_RST_Pin, GPIO_PIN_RESET);
@@ -670,7 +527,7 @@ void state_machine_run(void) {
      * Main Event Loop
      * ======================================================================== */
     while (1) {
-        /* Check EXIT button (PC13, active low) */
+        /* Check EXIT button (active low) */
         uint8_t exit_button_pressed = (HAL_GPIO_ReadPin(EXIT_BUTTON_GPIO_Port, EXIT_BUTTON_Pin) == GPIO_PIN_RESET);
 
         /* Card Detection Polling
@@ -696,7 +553,7 @@ void state_machine_run(void) {
             lcd_print_line(1, "Menu exited");
             lcd_print_line(2, "By button");
             printf("Menu exited by button.\r\n");
-            HAL_Delay(600);
+            HAL_Delay(EXIT_MESSAGE_DISPLAY_MS);
             show_ready_screen();
             wait_card_removed(uid);
             continue;
@@ -706,7 +563,6 @@ void state_machine_run(void) {
          * Card Appearance Handler (new card detected)
          * ==================================================================== */
         if (new_appearance) {
-            const char *username = get_username_str(uid);
             print_uid_uart(uid);
             beep_ok();
 
@@ -754,7 +610,7 @@ void state_machine_run(void) {
                     lcd_print_line(2, b);
                     printf("LOW BALANCE slot %d: %ld.%02ld\r\n", current_slot, (long)(bal/100), (long)llabs(bal%100));
                     beep_low_alert();
-                    HAL_Delay(800);
+                    HAL_Delay(ALERT_MESSAGE_DISPLAY_MS);
                     show_menu_option(uid);
                 }
             }
@@ -801,7 +657,7 @@ void state_machine_run(void) {
             lcd_print_line(1, "Menu Timeout");
             lcd_print_line(2, "Ready - Tap Card");
             printf("Menu timeout.\r\n");
-            HAL_Delay(800);
+            HAL_Delay(ALERT_MESSAGE_DISPLAY_MS);
             show_ready_screen();
         }
 

@@ -46,6 +46,18 @@
 /** Display hold time after menu action before returning to menu */
 #define POST_ACTION_DISPLAY_HOLD_MS     800
 
+/** Time each history entry stays on the LCD */
+#define HISTORY_ENTRY_DISPLAY_MS        900
+
+/** Display hold time for the "Menu exited / By button" message */
+#define EXIT_MESSAGE_DISPLAY_MS         600
+
+/** Display hold time for low-balance and menu-timeout messages */
+#define ALERT_MESSAGE_DISPLAY_MS        800
+
+/** Gap between the two beeps played for an unregistered card */
+#define UNKNOWN_CARD_BEEP_GAP_MS        80
+
 /** Initial power-up delay for LCD stabilization */
 #define LCD_POWERUP_DELAY_MS            50
 
@@ -120,31 +132,34 @@
 
 /* ============================================================================
  * LCD Pin Definitions (4-bit HD44780 mode)
+ *
+ * Matches the wiring in "Circuit diagram.png" and rfidf.ioc: PB0..PB5.
+ * PB12 is reserved for the MFRC522 reset line, so it must not be reused here.
  * ============================================================================ */
 
 /** LCD Register Select (RS) - command/data mode */
 #define LCD_RS_GPIO_Port                GPIOB
-#define LCD_RS_Pin                      GPIO_PIN_1
+#define LCD_RS_Pin                      GPIO_PIN_4
 
 /** LCD Enable (EN/E) - data latch pulse */
 #define LCD_EN_GPIO_Port                GPIOB
-#define LCD_EN_Pin                      GPIO_PIN_2
+#define LCD_EN_Pin                      GPIO_PIN_5
 
 /** LCD Data bit 0 (DB4) */
 #define LCD_D4_GPIO_Port                GPIOB
-#define LCD_D4_Pin                      GPIO_PIN_10
+#define LCD_D4_Pin                      GPIO_PIN_0
 
 /** LCD Data bit 1 (DB5) */
 #define LCD_D5_GPIO_Port                GPIOB
-#define LCD_D5_Pin                      GPIO_PIN_11
+#define LCD_D5_Pin                      GPIO_PIN_1
 
 /** LCD Data bit 2 (DB6) */
 #define LCD_D6_GPIO_Port                GPIOB
-#define LCD_D6_Pin                      GPIO_PIN_12
+#define LCD_D6_Pin                      GPIO_PIN_2
 
 /** LCD Data bit 3 (DB7) */
 #define LCD_D7_GPIO_Port                GPIOB
-#define LCD_D7_Pin                      GPIO_PIN_13
+#define LCD_D7_Pin                      GPIO_PIN_3
 
 /* ============================================================================
  * MFRC522 RFID Reader Pins (SPI1)
@@ -166,7 +181,7 @@
 #define MFRC522_MOSI_GPIO_Port          GPIOA
 #define MFRC522_MOSI_Pin                GPIO_PIN_7
 
-/** MFRC522 Reset (RST) - active high, active low reset */
+/** MFRC522 Reset (RST/NRSTPD) - drive high for normal operation, low to reset */
 #define MFRC522_RST_GPIO_Port           GPIOB
 #define MFRC522_RST_Pin                 GPIO_PIN_12
 
@@ -178,7 +193,7 @@
 #define BUZZER_GPIO_Port                GPIOA
 #define BUZZER_Pin                      GPIO_PIN_8
 
-/** Exit button (menu exit) - active low */
+/** Exit button (menu exit) - active low; PC13 is also the Nucleo blue user button */
 #define EXIT_BUTTON_GPIO_Port           GPIOC
 #define EXIT_BUTTON_Pin                 GPIO_PIN_13
 

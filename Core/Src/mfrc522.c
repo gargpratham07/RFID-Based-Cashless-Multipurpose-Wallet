@@ -385,8 +385,13 @@ uint8_t MFRC522_Check(uint8_t *id)
     uint8_t status;
     uint8_t tagtype[2];
     
-    /* Step 1: Send request to detect card */
-    status = MFRC522_Request(PICC_REQIDL, tagtype);
+    /* Step 1: Wake up any card in the field.
+     * WUPA (PICC_REQALL) is used instead of REQA (PICC_REQIDL) because this
+     * function halts the card at the end; a halted card ignores REQA, so with
+     * REQA a card held on the reader would only be seen once (until it is
+     * taken out of the field) and hold-to-select / debouncing would never
+     * trigger. */
+    status = MFRC522_Request(PICC_REQALL, tagtype);
     if (status != MI_OK) {
         return MI_NOTAGERR;
     }

@@ -144,9 +144,9 @@ static void MX_SPI1_Init(void) {
  * - Mode: TX+RX (transmit and receive)
  * - Oversampling: 16x (standard STM32 UART oversampling)
  *
- * GPIO pins configured separately in MX_GPIO_Init():
- * - PA9: USART2_TX (debug output)
- * - PA10: USART2_RX (debug input, not used for this application)
+ * GPIO pins configured in HAL_UART_MspInit() (stm32f3xx_hal_msp.c):
+ * - PA2: USART2_TX (debug output, routed to the ST-LINK virtual COM port)
+ * - PA3: USART2_RX (debug input, not used for this application)
  *
  * Usage: Integrated with __io_putchar() for printf() redirection
  *
@@ -176,17 +176,17 @@ static void MX_USART2_UART_Init(void) {
  *   PA5:  SCK (SPI1 clock, alternate function)
  *   PA6:  MISO (SPI1 receive, alternate function)
  *   PA7:  MOSI (SPI1 transmit, alternate function)
- *   PA8:  Buzzer (active high PWM output)
- *   PA9:  USART2_TX (debug output, alternate function)
- *   PA10: USART2_RX (debug input, alternate function)
+ *   PA8:  Buzzer (active high output)
+ *   (PA2/PA3 USART2 pins are set up in HAL_UART_MspInit)
  *
  * GPIOB (LCD control & data & RFID reset):
- *   PB1:  LCD RS (register select, push-pull output)
- *   PB2:  LCD EN (strobe/enable, push-pull output)
- *   PB10: LCD D4 (data bit 4, push-pull output)
- *   PB11: LCD D5 (data bit 5, push-pull output)
- *   PB12: LCD D6 (data bit 6, push-pull output) + MFRC522 RST
- *   PB13: LCD D7 (data bit 7, push-pull output)
+ *   PB0:  LCD D4 (data bit 4, push-pull output)
+ *   PB1:  LCD D5 (data bit 5, push-pull output)
+ *   PB2:  LCD D6 (data bit 6, push-pull output)
+ *   PB3:  LCD D7 (data bit 7, push-pull output)
+ *   PB4:  LCD RS (register select, push-pull output)
+ *   PB5:  LCD EN (strobe/enable, push-pull output)
+ *   PB12: MFRC522 RST (push-pull output, held high)
  *
  * GPIOC (Button input):
  *   PC13: EXIT button (input with pull-up, active low)
@@ -215,7 +215,7 @@ static void MX_GPIO_Init(void) {
    * LCD Data & Control Pins (GPIOB)
    * ======================================================================== */
   
-  /* LCD RS (PB1) and EN (PB2) control lines: push-pull outputs (initially low) */
+  /* LCD RS (PB4) and EN (PB5) control lines: push-pull outputs (initially low) */
   HAL_GPIO_WritePin(GPIOB, LCD_RS_Pin|LCD_EN_Pin, GPIO_PIN_RESET);
   GPIO_InitStruct.Pin = LCD_RS_Pin|LCD_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -223,7 +223,7 @@ static void MX_GPIO_Init(void) {
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /* LCD D4-D7 (PB10-PB13) data lines: push-pull outputs (initially low) */
+  /* LCD D4-D7 (PB0-PB3) data lines: push-pull outputs (initially low) */
   HAL_GPIO_WritePin(GPIOB, LCD_D4_Pin|LCD_D5_Pin|LCD_D6_Pin|LCD_D7_Pin, GPIO_PIN_RESET);
   GPIO_InitStruct.Pin = LCD_D4_Pin|LCD_D5_Pin|LCD_D6_Pin|LCD_D7_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -236,30 +236,30 @@ static void MX_GPIO_Init(void) {
    * ======================================================================== */
   
   /* PB12 RST (reset pin, active high, default to HIGH for normal operation) */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
-  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  HAL_GPIO_WritePin(MFRC522_RST_GPIO_Port, MFRC522_RST_Pin, GPIO_PIN_SET);
+  GPIO_InitStruct.Pin = MFRC522_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(MFRC522_RST_GPIO_Port, &GPIO_InitStruct);
 
   /* ========================================================================
    * Buzzer Output (GPIOA)
    * ======================================================================== */
   
   /* PA8 Buzzer (active high PWM, default LOW for silent state) */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, GPIO_PIN_RESET);
+  GPIO_InitStruct.Pin = BUZZER_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(BUZZER_GPIO_Port, &GPIO_InitStruct);
 
   /* ========================================================================
    * Button Input (GPIOC)
    * ======================================================================== */
   
   /* PC13 EXIT button (input with pull-up, active low) */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Pin = EXIT_BUTTON_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(EXIT_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
   /* PC14-PC15 Reserved buttons (input with pull-up for safety) */
   GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15;
@@ -272,10 +272,10 @@ static void MX_GPIO_Init(void) {
    * ======================================================================== */
   
   /* PA4 CS (chip select, manual control, start HIGH for no selection) */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  HAL_GPIO_WritePin(MFRC522_CS_GPIO_Port, MFRC522_CS_Pin, GPIO_PIN_SET);
+  GPIO_InitStruct.Pin = MFRC522_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(MFRC522_CS_GPIO_Port, &GPIO_InitStruct);
 
   /* PA5/PA6/PA7 SPI1 bus (SCK, MISO, MOSI as alternate function) */
   GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
@@ -302,7 +302,7 @@ static void MX_GPIO_Init(void) {
  * - APB1 Clock (PCLK1): 36 MHz (APB1 prescaler = 2) [max 36 MHz on F303]
  * - APB2 Clock (PCLK2): 72 MHz (APB2 prescaler = 1) [SPI clock domain]
  * - UART2 Clock: PCLK1 = 36 MHz (USART2 on APB1 bus)
- * - Flash Latency: 1 wait state (required for 72 MHz operation)
+ * - Flash Latency: 2 wait states (RM0316: 2 WS required for 48 < HCLK <= 72 MHz)
  *
  * This clock configuration gives:
  * - SPI1 clock (APB2): Up to 72 MHz (actual SPI freq 72MHz / prescaler)
@@ -340,7 +340,7 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;         /* HCLK = SYSCLK / 1 = 72 MHz */
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;          /* PCLK1 = HCLK / 2 = 36 MHz */
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;          /* PCLK2 = HCLK / 1 = 72 MHz */
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK) Error_Handler();
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
 
   /* ========================================================================
    * Peripheral Clock Configuration (UART2)

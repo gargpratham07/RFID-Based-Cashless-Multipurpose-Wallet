@@ -213,4 +213,14 @@ uint8_t MFRC522_SelectTag(uint8_t *serNum);
  */
 void MFRC522_Halt(void);
 
+/**
+ * MFRC522_Check
+ * @brief Poll for a card and read its UID (wake-up, anticollision, select, halt)
+ * Uses WUPA (PICC_REQALL) so a card that is still held on the reader is
+ * detected again on every poll, which hold-to-select and debouncing rely on.
+ * @param id: Output buffer for the 5-byte UID (4 bytes + BCC)
+ * @return MI_OK if a card answered, MI_NOTAGERR if none, MI_ERR on error
+ */
+uint8_t MFRC522_Check(uint8_t *id);
+
 #endif /* MFRC522_H */
